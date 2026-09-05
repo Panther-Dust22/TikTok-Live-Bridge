@@ -10,7 +10,7 @@ It can provide:
 * ❤️ Total LIVE likes
 * 👋 Viewer enter / leave
 * 💬 Chat messages
-* 👍 Individual likes
+* 👍 Individual likes (note these dont always work)
 * 🎁 Gifts
 * ➕ Follows
 * ⭐ Subscriptions
