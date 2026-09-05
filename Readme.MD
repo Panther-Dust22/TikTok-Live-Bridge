@@ -1,8 +1,10 @@
 # TikTok LIVE Studio Bridge
 
-A local bridge that runs inside **TikTok LIVE Studio** and exposes LIVE data through a simple WebSocket/TCP interface on port `21214`.
+A local bridge that runs inside **TikTok LIVE Studio** and exposes LIVE data through a WebSocket/TCP server on port `21214`.
 
-It can be used by other applications to receive:
+The bridge receives LIVE events from TikTok LIVE Studio, converts them into simple JSON messages, and **broadcasts them to connected applications**.
+
+It can provide:
 
 * 👀 Viewer count
 * ❤️ Total LIVE likes
@@ -14,7 +16,9 @@ It can be used by other applications to receive:
 * ⭐ Subscriptions
 * 🔗 Shares
 
-It can also send chat messages into TikTok LIVE Studio over TCP.
+Applications can connect to the bridge using WebSocket or TCP.
+
+TCP clients can also send supported commands back to the bridge, such as sending a chat message into TikTok LIVE Studio.
 
 ---
 
@@ -53,7 +57,21 @@ It can also send chat messages into TikTok LIVE Studio over TCP.
 
 The bridge runs inside TikTok LIVE Studio's Electron preload environment.
 
-Most LIVE interaction events are received from LIVE Studio's internal event stream, including:
+There are two main sides to the bridge:
+
+```text
+TikTok LIVE Studio
+        ↓
+Bridge receives LIVE data
+        ↓
+Bridge broadcasts JSON events
+        ↓
+Your application
+```
+
+## Receiving Data From TikTok LIVE Studio
+
+The bridge receives most LIVE interaction events from TikTok LIVE Studio's internal event stream, including:
 
 * Chat
 * Viewer enter / leave
@@ -63,15 +81,43 @@ Most LIVE interaction events are received from LIVE Studio's internal event stre
 * Subscriptions
 * Shares
 
-### Viewer Count & Total LIVE Likes
-
 Viewer count and total LIVE likes are handled differently.
 
 These values are read directly from the **TikTok LIVE Studio webpage / UI**, allowing the bridge to use the totals displayed by LIVE Studio itself.
 
-The bridge then converts the data into simple JSON messages that can be used by other applications.
+## Sending Data to Applications
 
-You do **not** need to understand TikTok LIVE Studio's internal payloads to use the normal WebSocket API.
+The bridge hosts a local WebSocket/TCP server on:
+
+```text
+127.0.0.1:21214
+```
+
+Other applications connect to this server as **clients**.
+
+Once connected, the bridge broadcasts supported LIVE events to them as JSON.
+
+Your application does not need to connect directly to TikTok.
+
+It only connects to the local bridge.
+
+## Sending Commands Back to the Bridge
+
+TCP is also two-way.
+
+A connected TCP client can send supported commands to the bridge.
+
+For example:
+
+```text
+Your application
+        ↓
+send_chat command
+        ↓
+Bridge
+        ↓
+TikTok LIVE Studio
+```
 
 ---
 
@@ -144,13 +190,9 @@ banner1.png
 star-sabers.png
 ```
 
-All three files should be in the same `preload` folder.
-
 ### Step 2 — Edit the Preload Files
 
-The bridge must be loaded by TikTok LIVE Studio's preload scripts.
-
-Find these three files:
+Find:
 
 ```text
 servicePreload.js
@@ -158,19 +200,13 @@ liveCenterContainerPreload.js
 webviewContainerPreload.js
 ```
 
-Add this line as the **first line** of each file:
+Add this as the **first line** of each file:
 
 ```js
 require('./bridge.js');
 ```
 
-For example, a preload file beginning with:
-
-```js
-"use strict";
-```
-
-should become:
+For example:
 
 ```js
 require('./bridge.js');
@@ -178,13 +214,7 @@ require('./bridge.js');
 "use strict";
 ```
 
-Do this for **all three** preload files:
-
-```text
-servicePreload.js
-liveCenterContainerPreload.js
-webviewContainerPreload.js
-```
+Do this for all three preload files.
 
 ### Step 3 — Launch TikTok LIVE Studio
 
@@ -194,15 +224,15 @@ If everything was installed correctly, the **Emstar233 TikTok Live Bridge** spla
 
 ### ❌ No Splash Screen?
 
-If the splash screen does not appear, check that:
+Check that:
 
-* `bridge.js` is inside the correct `preload` folder.
-* `banner1.png` is inside the same folder.
-* `star-sabers.png` is inside the same folder.
+* `bridge.js` is in the correct `preload` folder.
+* `banner1.png` is in the same folder.
+* `star-sabers.png` is in the same folder.
 * `require('./bridge.js');` is the first line of all three preload files.
-* You edited the files belonging to the **currently installed version** of TikTok LIVE Studio.
+* You edited the files belonging to the currently installed TikTok LIVE Studio version.
 
-After making any corrections, completely close and restart TikTok LIVE Studio.
+After correcting the installation, completely close and restart TikTok LIVE Studio.
 
 ---
 
@@ -210,40 +240,39 @@ After making any corrections, completely close and restart TikTok LIVE Studio.
 
 TikTok LIVE Studio updates may create a new version folder and replace its preload files.
 
-This can remove the bridge injection.
-
-If the bridge stops loading after a LIVE Studio update:
+If the bridge stops loading after an update:
 
 1. Close TikTok LIVE Studio.
 2. Right-click `install-bridge.bat`.
 3. Select **Run as administrator**.
-4. Allow the installer to complete.
-5. Launch TikTok LIVE Studio.
-6. Confirm that the bridge splash screen appears.
-
-If the splash screen appears, the bridge has loaded successfully.
+4. Launch TikTok LIVE Studio.
+5. Confirm that the splash screen appears.
 
 ---
 
 # Connection
 
-The bridge listens locally on:
+The bridge **hosts** its local server on:
 
 ```text
 127.0.0.1:21214
 ```
 
+Your application connects to this address as a client.
+
 ## WebSocket
 
-For normal applications, connect to:
+For normal event access:
 
 ```text
 ws://127.0.0.1:21214/
 ```
 
+The bridge broadcasts supported LIVE events to every connected WebSocket client.
+
 ## TCP
 
-TCP clients can connect to:
+TCP clients connect to:
 
 ```text
 127.0.0.1:21214
@@ -251,11 +280,16 @@ TCP clients can connect to:
 
 TCP uses newline-delimited JSON.
 
+TCP can be used for:
+
+* Raw bridge events
+* Supported commands such as `send_chat`
+
 ---
 
 # WebSocket Events
 
-Every normal WebSocket message follows the same basic structure:
+The bridge broadcasts WebSocket messages using this structure:
 
 ```json
 {
@@ -278,30 +312,25 @@ For example:
 }
 ```
 
-Use the `event` field to determine what happened, then read whatever fields you need from `data`.
+Your application receives these broadcasts through its WebSocket connection.
 
-### You Do Not Need Every Field
+Use the `event` field to determine what happened.
 
-Your application does **not** need to use every field the bridge provides.
-
-For example, if you only care about the nickname of somebody entering:
+For example:
 
 ```js
-if (msg.event === "enter") {
-    const nickname = msg.data.nickname;
-}
+ws.onmessage = (message) => {
+    const msg = JSON.parse(message.data);
+
+    if (msg.event === "enter") {
+        console.log(msg.data.nickname);
+    }
+};
 ```
 
-If you only care about the person's nickname and their chat message:
+Here, `ws.onmessage` is your application's client-side handler.
 
-```js
-if (msg.event === "chat") {
-    const nickname = msg.data.nickname;
-    const message = msg.data.comment;
-}
-```
-
-Everything else in the event can simply be ignored.
+The bridge itself is the WebSocket host/server broadcasting the event.
 
 ---
 
@@ -326,14 +355,6 @@ Everything else in the event can simply be ignored.
 
 ## Viewer Count
 
-Event:
-
-```text
-roomUser
-```
-
-Example:
-
 ```json
 {
   "event": "roomUser",
@@ -343,31 +364,17 @@ Example:
 }
 ```
 
-### Get Only the Viewer Count
+Use only the count:
 
 ```js
 if (msg.event === "roomUser") {
     const viewers = msg.data.viewerCount;
-
-    console.log("Viewers:", viewers);
 }
 ```
 
 ---
 
 ## Total LIVE Likes
-
-Event:
-
-```text
-likeTotal
-```
-
-This is the **total number of likes for the LIVE**.
-
-It is separate from the `like` event, which represents an individual viewer sending likes.
-
-Example:
 
 ```json
 {
@@ -379,27 +386,17 @@ Example:
 }
 ```
 
-### Get Only the LIVE Like Total
+Use only the total:
 
 ```js
 if (msg.event === "likeTotal") {
     const likes = msg.data.totalLikeCount;
-
-    console.log("Total LIVE Likes:", likes);
 }
 ```
 
 ---
 
 ## Viewer Entered
-
-Event:
-
-```text
-enter
-```
-
-Example:
 
 ```json
 {
@@ -413,16 +410,7 @@ Example:
 }
 ```
 
-Available data:
-
-| Field      | Description           |
-| ---------- | --------------------- |
-| `nickname` | User's display name   |
-| `userId`   | TikTok user ID        |
-| `uniqueId` | TikTok username       |
-| `secUid`   | TikTok secure user ID |
-
-### Get Only the Nickname
+Only need the nickname?
 
 ```js
 if (msg.event === "enter") {
@@ -436,14 +424,6 @@ if (msg.event === "enter") {
 
 ## Viewer Left
 
-Event:
-
-```text
-leave
-```
-
-Example:
-
 ```json
 {
   "event": "leave",
@@ -456,27 +436,15 @@ Example:
 }
 ```
 
-### Get Only the Nickname
-
 ```js
 if (msg.event === "leave") {
-    const nickname = msg.data.nickname;
-
-    console.log(`${nickname} left`);
+    console.log(`${msg.data.nickname} left`);
 }
 ```
 
 ---
 
 ## Chat
-
-Event:
-
-```text
-chat
-```
-
-Example:
 
 ```json
 {
@@ -505,22 +473,7 @@ Example:
 }
 ```
 
-Some of the most useful fields are:
-
-| Field               | Description                      |
-| ------------------- | -------------------------------- |
-| `nickname`          | User's display name              |
-| `uniqueId`          | TikTok username                  |
-| `userId`            | TikTok user ID                   |
-| `comment`           | Chat message                     |
-| `profilePictureUrl` | Profile picture URL              |
-| `isModerator`       | Whether the user is a moderator  |
-| `isSubscriber`      | Whether the user is a subscriber |
-| `topGifterRank`     | Top gifter rank when available   |
-
-### Get Only Nickname + Message
-
-For most chat integrations, this may be all you need:
+Only need nickname and message?
 
 ```js
 if (msg.event === "chat") {
@@ -534,18 +487,6 @@ if (msg.event === "chat") {
 ---
 
 ## Individual Like
-
-Event:
-
-```text
-like
-```
-
-This event represents a **specific viewer sending likes**.
-
-It is separate from `likeTotal`, which represents the overall LIVE like total.
-
-Example:
 
 ```json
 {
@@ -562,28 +503,17 @@ Example:
 }
 ```
 
-### Get Nickname + Likes
-
 ```js
 if (msg.event === "like") {
-    const nickname = msg.data.nickname;
-    const likes = msg.data.likeCount;
-
-    console.log(`${nickname} sent ${likes} likes`);
+    console.log(
+        `${msg.data.nickname} sent ${msg.data.likeCount} likes`
+    );
 }
 ```
 
 ---
 
 ## Gift
-
-Event:
-
-```text
-gift
-```
-
-Example:
 
 ```json
 {
@@ -608,8 +538,6 @@ Example:
 }
 ```
 
-### Get Only Sender + Gift
-
 ```js
 if (msg.event === "gift") {
     const nickname = msg.data.nickname;
@@ -624,14 +552,6 @@ if (msg.event === "gift") {
 
 ## Follow
 
-Event:
-
-```text
-follow
-```
-
-Example:
-
 ```json
 {
   "event": "follow",
@@ -644,8 +564,6 @@ Example:
 }
 ```
 
-### Get Only the Nickname
-
 ```js
 if (msg.event === "follow") {
     console.log(`${msg.data.nickname} followed`);
@@ -655,14 +573,6 @@ if (msg.event === "follow") {
 ---
 
 ## Subscribe
-
-Event:
-
-```text
-subscribe
-```
-
-Example:
 
 ```json
 {
@@ -676,8 +586,6 @@ Example:
 }
 ```
 
-### Get Only the Nickname
-
 ```js
 if (msg.event === "subscribe") {
     console.log(`${msg.data.nickname} subscribed`);
@@ -687,14 +595,6 @@ if (msg.event === "subscribe") {
 ---
 
 ## Share
-
-Event:
-
-```text
-share
-```
-
-Example:
 
 ```json
 {
@@ -708,8 +608,6 @@ Example:
 }
 ```
 
-### Get Only the Nickname
-
 ```js
 if (msg.event === "share") {
     console.log(`${msg.data.nickname} shared the LIVE`);
@@ -720,7 +618,9 @@ if (msg.event === "share") {
 
 # Basic JavaScript Client
 
-Here is a complete basic WebSocket client:
+Your application acts as the WebSocket **client**.
+
+The bridge is the WebSocket **server**.
 
 ```js
 const ws = new WebSocket("ws://127.0.0.1:21214/");
@@ -798,12 +698,8 @@ ws.onmessage = (message) => {
     }
 };
 
-ws.onerror = (error) => {
-    console.error("WebSocket error:", error);
-};
-
 ws.onclose = () => {
-    console.log("Disconnected");
+    console.log("Disconnected from bridge");
 };
 ```
 
@@ -811,21 +707,11 @@ ws.onclose = () => {
 
 # Only Use the Data You Need
 
-The bridge sends the supported LIVE events to connected clients.
+The bridge broadcasts supported LIVE events to connected applications.
 
-Your application does **not** need to process all of them.
-
-Simply check `msg.event` and use the fields you need.
+Your application can simply ignore events and fields it does not need.
 
 ## Enter + Chat Only
-
-For example, if your application only needs:
-
-* The nickname of viewers entering
-* Chat nickname
-* Chat message
-
-you can use:
 
 ```js
 const ws = new WebSocket("ws://127.0.0.1:21214/");
@@ -834,21 +720,21 @@ ws.onmessage = (message) => {
     const msg = JSON.parse(message.data);
 
     if (msg.event === "enter") {
-        const nickname = msg.data.nickname;
-
-        console.log("ENTER:", nickname);
+        console.log(
+            "ENTER:",
+            msg.data.nickname
+        );
     }
 
     if (msg.event === "chat") {
-        const nickname = msg.data.nickname;
-        const chatMessage = msg.data.comment;
-
-        console.log("CHAT:", nickname, chatMessage);
+        console.log(
+            "CHAT:",
+            msg.data.nickname,
+            msg.data.comment
+        );
     }
 };
 ```
-
-You can completely ignore viewer counts, likes, gifts, follows and every other event.
 
 ## Viewer Count Only
 
@@ -862,27 +748,7 @@ ws.onmessage = (message) => {
         return;
     }
 
-    const viewers = msg.data.viewerCount;
-
-    console.log("Viewers:", viewers);
-};
-```
-
-## Total LIVE Likes Only
-
-```js
-const ws = new WebSocket("ws://127.0.0.1:21214/");
-
-ws.onmessage = (message) => {
-    const msg = JSON.parse(message.data);
-
-    if (msg.event !== "likeTotal") {
-        return;
-    }
-
-    const likes = msg.data.totalLikeCount;
-
-    console.log("Total LIVE Likes:", likes);
+    console.log(msg.data.viewerCount);
 };
 ```
 
@@ -898,12 +764,10 @@ ws.onmessage = (message) => {
         return;
     }
 
-    const nickname = msg.data.nickname;
-    const gift = msg.data.giftName;
-    const amount = msg.data.repeatCount;
-
     console.log(
-        `${nickname} sent ${gift} x${amount}`
+        msg.data.nickname,
+        msg.data.giftName,
+        msg.data.repeatCount
     );
 };
 ```
@@ -912,19 +776,21 @@ ws.onmessage = (message) => {
 
 # TCP Raw Events
 
-TCP clients can request raw bridge events.
-
-Connect to:
+TCP uses the same local bridge server:
 
 ```text
 127.0.0.1:21214
 ```
 
-Then send:
+Unlike the normal WebSocket event connection, TCP can also receive commands from the connected application.
+
+A TCP client can request raw bridge events by sending:
 
 ```json
 {"type":"__hello","role":"client","wantsRaw":true}
 ```
+
+The bridge can then send raw events back to that TCP client.
 
 Raw messages use a structure similar to:
 
@@ -935,7 +801,7 @@ Raw messages use a structure similar to:
 }
 ```
 
-Raw mode is mainly intended for debugging or applications that need access to the original LIVE Studio payload.
+Raw mode is mainly intended for debugging or applications that need the original LIVE Studio payload.
 
 For most applications, the normal WebSocket API is easier to use.
 
@@ -943,7 +809,19 @@ For most applications, the normal WebSocket API is easier to use.
 
 # Send Chat
 
-The TCP connection can also be used to send a chat message into TikTok LIVE Studio.
+TCP can also be used in the opposite direction.
+
+Your application sends a command to the bridge, and the bridge passes the chat request into TikTok LIVE Studio.
+
+```text
+Your application
+        ↓
+TCP
+        ↓
+TikTok LIVE Studio Bridge
+        ↓
+TikTok LIVE Studio
+```
 
 Connect to:
 
@@ -957,7 +835,7 @@ Then send a newline-terminated JSON command:
 {"type":"send_chat","text":"hello from my app"}
 ```
 
-## Node.js Example
+## Node.js
 
 ```js
 const net = require("net");
@@ -978,7 +856,7 @@ const socket = net.createConnection({
 });
 ```
 
-## Python Example
+## Python
 
 ```python
 import socket
@@ -1002,33 +880,43 @@ s.close()
 
 # Quick Reference
 
-### Installation
+## Data Flow
 
 ```text
-Right-click install-bridge.bat
+TikTok LIVE Studio
         ↓
-Run as administrator
+Bridge receives LIVE events
         ↓
-Launch TikTok LIVE Studio
+Bridge broadcasts them
         ↓
-Bridge splash screen appears
-        ↓
-Installed successfully
+Connected WebSocket/TCP clients
 ```
 
-### WebSocket
+## Commands
+
+```text
+Application
+        ↓
+TCP command
+        ↓
+Bridge
+        ↓
+TikTok LIVE Studio
+```
+
+## WebSocket Server
 
 ```text
 ws://127.0.0.1:21214/
 ```
 
-### TCP
+## TCP Server
 
 ```text
 127.0.0.1:21214
 ```
 
-### Events
+## Events
 
 ```text
 roomUser   Current viewer count
@@ -1043,7 +931,7 @@ subscribe  New subscription
 share      LIVE shared
 ```
 
-### TCP Command
+## TCP Command
 
 ```text
 send_chat
